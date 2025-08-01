@@ -22,8 +22,13 @@ dotnet run
 API runs at: `http://localhost:5100`
 
 **Firebase Configuration:**
-- Replace `firebase-service-account.json` with your Firebase service account key
-- The database URL is automatically loaded from the service account file
+- Place your `firebase-service-account.json` in the `BackendAPI/` folder
+- The system uses **smart configuration** with multiple options:
+  1. **Auto-mode**: Extracts `project_id` from service account and builds URL automatically
+  2. **Manual-mode**: Set `Firebase:DatabaseUrl` in `appsettings.json` 
+  3. **Environment-mode**: Use `FIREBASE_DATABASE_URL` environment variable
+- Supports multiple Firebase regions (default: `asia-southeast1`)
+- No hardcoded URLs needed!
 
 ### 2. Frontend Setup (Angular 20)
 
