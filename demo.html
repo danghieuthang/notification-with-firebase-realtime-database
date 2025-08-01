@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Realtime Database Notification Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .notification {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .notification.unread {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, button {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Firebase Realtime Database Notification Demo</h1>
+        
+        <div class="form-group">
+            <label for="userId">User ID:</label>
+            <input type="text" id="userId" value="user123" placeholder="Enter User ID">
+        </div>
+
+        <div class="form-group">
+            <label for="apiUrl">Backend API URL:</label>
+            <input type="text" id="apiUrl" value="https://localhost:7xxx" placeholder="Backend API URL">
+        </div>
+
+        <div class="form-group">
+            <h3>Send Notification</h3>
+            <label for="title">Title:</label>
+            <input type="text" id="title" placeholder="Notification title">
+            
+            <label for="body">Body:</label>
+            <textarea id="body" placeholder="Notification body"></textarea>
+            
+            <button onclick="sendNotification()">Send Notification</button>
+        </div>
+
+        <div class="form-group">
+            <h3>Generate Access URL</h3>
+            <label for="description">Description:</label>
+            <input type="text" id="description" placeholder="URL description">
+            
+            <button onclick="generateUrl()">Generate Access URL</button>
+        </div>
+
+        <div class="form-group">
+            <button onclick="loadNotifications()">Load Notifications</button>
+            <button onclick="connectToFirebase()">Connect to Firebase</button>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="form-group">
+            <h3>Notifications</h3>
+            <div id="notifications"></div>
+        </div>
+
+        <div class="form-group">
+            <h3>Firebase Connection Status</h3>
+            <div id="firebaseStatus">Not connected</div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+        import { getDatabase, ref, onValue, off } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js';
+
+        // Firebase configuration (replace with your config)
+        const firebaseConfig = {
+            apiKey: "your-api-key",
+            authDomain: "your-project-id.firebaseapp.com",
+            databaseURL: "https://your-project-id-default-rtdb.firebaseio.com/",
+            projectId: "your-project-id",
+            storageBucket: "your-project-id.appspot.com",
+            messagingSenderId: "your-sender-id",
+            appId: "your-app-id"
+        };
+
+        let app;
+        let database;
+        let notificationsRef;
+
+        window.connectToFirebase = () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                database = getDatabase(app);
+                
+                const userId = document.getElementById('userId').value || 'user123';
+                notificationsRef = ref(database, `notifications/${userId}`);
+                
+                // Listen for changes
+                onValue(notificationsRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        displayNotifications(data);
+                        showStatus('Connected to Firebase and listening for notifications', 'success');
+                    } else {
+                        document.getElementById('notifications').innerHTML = '<p>No notifications found</p>';
+                        showStatus('Connected to Firebase but no notifications found', 'success');
+                    }
+                });
+
+                document.getElementById('firebaseStatus').innerHTML = 'Connected ✅';
+            } catch (error) {
+                showStatus(`Firebase connection error: ${error.message}`, 'error');
+                document.getElementById('firebaseStatus').innerHTML = 'Connection failed ❌';
+            }
+        };
+
+        window.sendNotification = async () => {
+            const userId = document.getElementById('userId').value;
+            const title = document.getElementById('title').value;
+            const body = document.getElementById('body').value;
+            const apiUrl = document.getElementById('apiUrl').value;
+
+            if (!userId || !title) {
+                showStatus('User ID and Title are required', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiUrl}/api/notification/send`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        title: title,
+                        body: body
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus(`Notification sent successfully: ${result.notificationId}`, 'success');
+                    document.getElementById('title').value = '';
+                    document.getElementById('body').value = '';
+                } else {
+                    showStatus(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Network error: ${error.message}`, 'error');
+            }
+        };
+
+        window.generateUrl = async () => {
+            const userId = document.getElementById('userId').value;
+            const description = document.getElementById('description').value;
+            const apiUrl = document.getElementById('apiUrl').value;
+
+            if (!userId) {
+                showStatus('User ID is required', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiUrl}/api/notification/generate-url`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        description: description
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus(`Access URL generated: ${result.accessUrl}`, 'success');
+                    document.getElementById('description').value = '';
+                } else {
+                    showStatus(`Error: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Network error: ${error.message}`, 'error');
+            }
+        };
+
+        window.loadNotifications = async () => {
+            const userId = document.getElementById('userId').value;
+            const apiUrl = document.getElementById('apiUrl').value;
+
+            if (!userId) {
+                showStatus('User ID is required', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiUrl}/api/notification/user/${userId}`);
+                const notifications = await response.json();
+
+                if (response.ok) {
+                    displayNotifications(notifications);
+                    showStatus('Notifications loaded successfully', 'success');
+                } else {
+                    showStatus('Error loading notifications', 'error');
+                }
+            } catch (error) {
+                showStatus(`Network error: ${error.message}`, 'error');
+            }
+        };
+
+        function displayNotifications(data) {
+            const container = document.getElementById('notifications');
+            container.innerHTML = '';
+
+            // Convert object to array if needed
+            const notifications = Array.isArray(data) ? data : Object.values(data || {});
+
+            if (notifications.length === 0) {
+                container.innerHTML = '<p>No notifications</p>';
+                return;
+            }
+
+            notifications
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .forEach(notification => {
+                    const div = document.createElement('div');
+                    div.className = `notification ${notification.isRead ? '' : 'unread'}`;
+                    
+                    const accessUrl = notification.data?.accessUrl;
+                    const accessUrlHtml = accessUrl ? 
+                        `<p><strong>Access URL:</strong> <a href="${accessUrl}" target="_blank">${accessUrl}</a></p>` : '';
+
+                    div.innerHTML = `
+                        <h4>${notification.title}</h4>
+                        <p>${notification.body}</p>
+                        ${accessUrlHtml}
+                        <small>
+                            ${new Date(notification.timestamp).toLocaleString()} 
+                            ${notification.isRead ? '(Read)' : '(Unread)'}
+                        </small>
+                    `;
+                    container.appendChild(div);
+                });
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.innerHTML = message;
+            status.className = `status ${type}`;
+            
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                status.innerHTML = '';
+                status.className = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
