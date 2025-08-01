@@ -67,6 +67,95 @@ App runs at: `http://localhost:4200`
 3. **Firebase** → Pushes update to Angular app in real-time
 4. **Angular** → Displays notification instantly
 
+## Sequence Diagram
+
+### User Registration Flow
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Angular App
+    participant API as .NET API
+    participant F as Firebase DB
+    
+    U->>A: 1. Enter User ID & Click Register
+    A->>API: 2. POST /api/notification/register {"userId": "demo123"}
+    API->>F: 3. Save welcome notification to /notifications/demo123/
+    API-->>A: 4. Return 200 OK (no content)
+    F-->>A: 5. Real-time push: New notification data
+    A->>A: 6. Display welcome notification instantly
+    A->>U: 7. Show "Successfully registered!" message
+```
+
+### Send Random Notification Flow
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Angular App
+    participant API as .NET API
+    participant F as Firebase DB
+    
+    U->>A: 1. Click "Send Random Notification"
+    A->>API: 2. POST /api/notification/send-random {"userId": "demo123"}
+    API->>API: 3. Generate random notification content
+    API->>F: 4. Save notification to /notifications/demo123/{id}
+    API-->>A: 5. Return 200 OK (no content)
+    F-->>A: 6. Real-time push: New notification data
+    A->>A: 7. Add notification to list (latest first)
+    A->>U: 8. Show notification with type badge & animation
+```
+
+### Firebase Config Loading Flow
+```mermaid
+sequenceDiagram
+    participant A as Angular App
+    participant API as .NET API
+    participant F as Firebase DB
+    
+    Note over A: App Initialization
+    A->>API: 1. GET /api/notification/firebase-config
+    API->>API: 2. Read firebase-service-account.json
+    API-->>A: 3. Return Firebase config (projectId, databaseURL, etc.)
+    A->>A: 4. Initialize Firebase SDK with config
+    A->>F: 5. Establish real-time connection
+    F-->>A: 6. Real-time listener ready
+    Note over A,F: Now ready to receive notifications
+```
+
+### Complete Real-time Notification Flow
+```mermaid
+sequenceDiagram
+    participant U1 as User 1
+    participant A1 as Angular App 1
+    participant U2 as User 2  
+    participant A2 as Angular App 2
+    participant API as .NET API
+    participant F as Firebase DB
+    
+    Note over U1,F: User 1 registers and starts listening
+    U1->>A1: Register with userId "user1"
+    A1->>API: POST /register {"userId": "user1"}
+    API->>F: Save welcome notification
+    F-->>A1: Push welcome notification
+    A1->>U1: Display welcome notification
+    
+    Note over U2,F: User 2 registers and starts listening  
+    U2->>A2: Register with userId "user2"
+    A2->>API: POST /register {"userId": "user2"}
+    API->>F: Save welcome notification
+    F-->>A2: Push welcome notification (only to user2)
+    A2->>U2: Display welcome notification
+    
+    Note over U1,F: User 1 sends random notification
+    U1->>A1: Click "Send Random Notification"
+    A1->>API: POST /send-random {"userId": "user1"}
+    API->>F: Save random notification for user1
+    F-->>A1: Push notification (only to user1)
+    A1->>U1: Display new notification instantly
+    
+    Note over A2,F: User 2 doesn't receive user1's notification
+    Note over A2: No update (notifications are user-specific)
+```
+
 ### API Endpoints
 
 **Register User:**
