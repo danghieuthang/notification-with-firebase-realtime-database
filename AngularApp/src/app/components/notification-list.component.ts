@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NotificationService, NotificationData } from '../services/notification.service';
+import { NotificationService, NotificationData, RegisterResponse } from '../services/notification.service';
 import { FirebaseRealtimeService } from '../services/firebase-realtime.service';
 import { Subscription } from 'rxjs';
 
@@ -30,6 +30,7 @@ import { Subscription } from 'rxjs';
         <div class="user-info">
           <h3>✓ Registered User: {{currentUserId}}</h3>
           <p><strong>Status:</strong> {{accessUrl}}</p>
+          <p><strong>Firebase Listen URL:</strong> <code class="url-code">{{firebaseListenUrl}}</code></p>
           <p><strong>Realtime Status:</strong> <span class="listening">🔴 Listening to Firebase database...</span></p>
         </div>
 
@@ -127,6 +128,17 @@ import { Subscription } from 'rxjs';
       border-radius: 8px;
       margin-bottom: 20px;
       border-left: 4px solid #28a745;
+    }
+
+    .url-code {
+      background: #f8f9fa;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #007bff;
+      border: 1px solid #dee2e6;
+      word-break: break-all;
     }
 
     .listening {
@@ -410,6 +422,7 @@ export class NotificationListComponent implements OnInit, OnDestroy {
   userId = '';
   currentUserId = '';
   accessUrl = '';
+  firebaseListenUrl = '';
   loading = false;
   loadingMessage = '';
   error = '';
@@ -441,14 +454,15 @@ export class NotificationListComponent implements OnInit, OnDestroy {
     this.clearMessages();
 
     this.notificationService.register(this.userId).subscribe({
-      next: (response) => {
+      next: (response: RegisterResponse) => {
         this.loading = false;
         
-        // Backend now returns 200 OK with no specific response body
-        // Registration is successful if we get here without error
+        // Backend now returns RegisterResponse with listenUrl
         this.isRegistered = true;
         this.currentUserId = this.userId;
-        this.accessUrl = 'Registration completed - listening for notifications';
+        this.accessUrl = response.message || 'Registration completed - listening for notifications';
+        this.firebaseListenUrl = response.listenUrl;
+        
         this.successMessage = 'Successfully registered! Welcome notification sent to Firebase.';
         
         // Start listening to realtime notifications
@@ -540,6 +554,7 @@ export class NotificationListComponent implements OnInit, OnDestroy {
     this.currentUserId = '';
     this.userId = '';
     this.accessUrl = '';
+    this.firebaseListenUrl = '';
     this.realtimeNotifications = [];
     this.historicalNotifications = [];
     

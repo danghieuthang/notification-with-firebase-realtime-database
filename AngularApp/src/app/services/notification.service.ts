@@ -3,18 +3,18 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { ApiConfigService } from './api-config.service';
 
+export interface RegisterResponse {
+  message: string;
+  listenUrl: string;
+  userId: string;
+}
+
 export interface NotificationData {
   id?: string; // Optional vì có thể được thêm từ Firebase key
   title: string;
   body: string;
   timestamp: string;
   type: string;
-}
-
-export interface RegisterResponse {
-  success: boolean;
-  message: string;
-  userId: string;
 }
 
 export interface SendNotificationResponse {
@@ -41,10 +41,10 @@ export class NotificationService {
   ) { }
 
   // Register user and get welcome notification - returns success status
-  register(userId: string): Observable<any> {
+  register(userId: string): Observable<RegisterResponse> {
     const url = `${this.apiConfig.notificationApiUrl}/register`;
     const body = { userId };
-    return this.http.post<any>(url, body, this.httpOptions);
+    return this.http.post<RegisterResponse>(url, body, this.httpOptions);
   }
 
   // Send random notification to user - returns void as notification will come via Firebase realtime
@@ -70,5 +70,12 @@ export class NotificationService {
   getNotifications(userId: string): Observable<NotificationData[]> {
     const url = `${this.apiConfig.notificationApiUrl}/user/${userId}`;
     return this.http.get<NotificationData[]>(url);
+  }
+
+  // Get Firebase notification path for userId (with hash)
+  getFirebaseNotificationPath(userId: string): Observable<{path: string, hashedUserId: string}> {
+    const url = `${this.apiConfig.notificationApiUrl}/firebase-path`;
+    const body = { userId };
+    return this.http.post<{path: string, hashedUserId: string}>(url, body, this.httpOptions);
   }
 }

@@ -119,8 +119,8 @@ sequenceDiagram
     Note over A: App Initialization
     A->>API: 1. GET /api/notification/firebase-config
     API->>API: 2. Read firebase-service-account.json
-    API-->>A: 3. Return Firebase config (projectId, databaseURL, etc.)
-    A->>A: 4. Initialize Firebase SDK with config
+    API-->>A: 3. Return minimal Firebase config (projectId, databaseURL only)
+    A->>A: 4. Initialize Firebase SDK with optimized config
     A->>F: 5. Establish real-time connection
     F-->>A: 6. Real-time listener ready
     Note over A,F: Now ready to receive notifications
@@ -185,7 +185,7 @@ GET /api/notification/firebase-config
 ```json
 {
   "notifications": {
-    "demo123": {
+    "a1b2c3d4e5f6": {
       "notification-id-1": {
         "title": "Welcome!",
         "body": "You have successfully registered to our notification system.",
@@ -203,6 +203,8 @@ GET /api/notification/firebase-config
 }
 ```
 
+**Note:** User IDs are hashed (SHA256, first 12 characters) for privacy. For example, `"demo123"` becomes `"a1b2c3d4e5f6"`.
+
 ## Key Demo Features
 
 ✅ **Instant Real-time Updates** - No refresh needed  
@@ -210,6 +212,7 @@ GET /api/notification/firebase-config
 ✅ **Clean UI** - Modern Angular interface with type badges  
 ✅ **Firebase Integration** - Real-time database synchronization  
 ✅ **Centralized Config** - Firebase settings loaded from backend  
+✅ **Privacy Protection** - User IDs are hashed in Firebase paths  
 
 ## Testing the Demo
 

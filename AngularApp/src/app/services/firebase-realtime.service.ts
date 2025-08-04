@@ -3,7 +3,7 @@ import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off, Database } from 'firebase/database';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { filter, switchMap } from 'rxjs/operators';
-import { NotificationData } from './notification.service';
+import { NotificationData, NotificationService } from './notification.service';
 import { FirebaseConfigService, FirebaseConfig } from './firebase-config.service';
 
 @Injectable({
@@ -19,7 +19,10 @@ export class FirebaseRealtimeService {
   private lastNotificationId: string | null = null;
   private isInitialized = false;
 
-  constructor(private firebaseConfigService: FirebaseConfigService) { }
+  constructor(
+    private firebaseConfigService: FirebaseConfigService,
+    private notificationService: NotificationService
+  ) { }
 
   private async initializeFirebase(): Promise<void> {
     if (this.isInitialized) return;
@@ -30,16 +33,12 @@ export class FirebaseRealtimeService {
       const config = this.firebaseConfigService.getCurrentConfig();
       
       if (config) {
-        console.log('Using Firebase config from backend API:', config);
+        console.log('Using optimized Firebase config from backend API:', config);
         this.app = initializeApp({
           projectId: config.projectId,
-          databaseURL: config.databaseURL,
-          authDomain: config.authDomain,
-          storageBucket: config.storageBucket,
-          apiKey: config.apiKey,
-          messagingSenderId: config.messagingSenderId,
-          appId: config.appId,
-          measurementId: config.measurementId
+          databaseURL: config.databaseURL
+          // Optimized: Only essential properties for Firebase Realtime Database
+          // Removed: authDomain, storageBucket, apiKey, messagingSenderId, appId, measurementId
         });
       } else {
         throw new Error('Failed to load config from backend');
@@ -66,32 +65,47 @@ export class FirebaseRealtimeService {
       throw new Error('Firebase database is not initialized');
     }
     
-    this.currentUserId = userId;
-    this.currentRef = ref(this.database, `notifications/${userId}`);
-    
-    onValue(this.currentRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        // Convert Firebase object to array and get the latest notification
-        const notifications = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        
-        // Sort by timestamp and get the latest
-        notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        
-        if (notifications.length > 0) {
-          const latestNotification = notifications[0] as NotificationData;
+    try {
+      // Get the hashed path from backend
+      const pathInfo = await this.notificationService.getFirebaseNotificationPath(userId).toPromise();
+      
+      if (!pathInfo) {
+        throw new Error('Failed to get Firebase notification path');
+      }
+      
+      this.currentUserId = userId;
+      console.log(`Subscribing to Firebase path: ${pathInfo.path} (hashed: ${pathInfo.hashedUserId})`);
+      
+      // Use the hashed path for Firebase subscription
+      this.currentRef = ref(this.database, pathInfo.path);
+      
+      onValue(this.currentRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          // Convert Firebase object to array and get the latest notification
+          const notifications = Object.keys(data).map(key => ({
+            id: key,
+            ...data[key]
+          }));
           
-          // Only emit if this is a new notification (different from the last one we processed)
-          if (this.lastNotificationId !== (latestNotification.id || null)) {
-            this.lastNotificationId = latestNotification.id || null;
-            this.notificationUpdates.next(latestNotification);
+          // Sort by timestamp and get the latest
+          notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          
+          if (notifications.length > 0) {
+            const latestNotification = notifications[0] as NotificationData;
+            
+            // Only emit if this is a new notification (different from the last one we processed)
+            if (this.lastNotificationId !== (latestNotification.id || null)) {
+              this.lastNotificationId = latestNotification.id || null;
+              this.notificationUpdates.next(latestNotification);
+            }
           }
         }
-      }
-    });
+      });
+    } catch (error) {
+      console.error('Error subscribing to notifications:', error);
+      throw error;
+    }
   }
 
   unsubscribeFromNotifications(userId?: string): void {
@@ -108,5 +122,18 @@ export class FirebaseRealtimeService {
       // Filter out null values
       filter(notification => notification !== null)
     ) as Observable<NotificationData>;
+  }
+
+  getCurrentDatabaseUrl(): string | null {
+    const config = this.firebaseConfigService.getCurrentConfig();
+    return config?.databaseURL || null;
+  }
+
+  getListenUrl(userId: string): string {
+    const databaseUrl = this.getCurrentDatabaseUrl();
+    if (databaseUrl) {
+      return `${databaseUrl}/notifications/${userId}`;
+    }
+    return `Firebase Realtime Database/notifications/${userId}`;
   }
 }

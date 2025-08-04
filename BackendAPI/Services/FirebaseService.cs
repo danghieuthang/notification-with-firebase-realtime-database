@@ -23,10 +23,12 @@ namespace BackendAPI.Services
     {
         private readonly ILogger<FirebaseService> _logger;
         private readonly FirebaseClient? _firebaseClient;
+        private readonly IHashService _hashService;
 
-        public FirebaseService(IConfiguration configuration, ILogger<FirebaseService> logger)
+        public FirebaseService(IConfiguration configuration, ILogger<FirebaseService> logger, IHashService hashService)
         {
             _logger = logger;
+            _hashService = hashService;
 
             try
             {
@@ -110,14 +112,18 @@ namespace BackendAPI.Services
 
                 if (_firebaseClient != null)
                 {
-                    // Save notification to Firebase: notifications/{userId}/{notificationId}
+                    // Hash userId for privacy and use it in Firebase path
+                    var hashedUserId = _hashService.HashUserId(userId);
+                    
+                    // Save notification to Firebase: notifications/{hashedUserId}/{notificationId}
                     await _firebaseClient
                         .Child("notifications")
-                        .Child(userId)
+                        .Child(hashedUserId)
                         .Child(notificationId)
                         .PutAsync(notification);
 
-                    _logger.LogInformation("Successfully saved notification to Firebase for user: {UserId}", userId);
+                    _logger.LogInformation("Notification sent to Firebase for user {UserId} (hashed: {HashedUserId}): {Title}", 
+                        userId, hashedUserId, title);
                     return notificationId;
                 }
                 else

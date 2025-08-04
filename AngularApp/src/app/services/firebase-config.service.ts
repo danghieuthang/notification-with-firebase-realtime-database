@@ -8,12 +8,8 @@ import { environment } from '../../environments/environment';
 export interface FirebaseConfig {
   projectId: string;
   databaseURL: string;
-  authDomain: string;
-  storageBucket: string;
-  apiKey?: string;
-  messagingSenderId?: string;
-  appId?: string;
-  measurementId?: string;
+  // Optimized: Only essential properties for Firebase Realtime Database
+  // Removed: authDomain, storageBucket, apiKey, messagingSenderId, appId, measurementId
 }
 
 @Injectable({
@@ -31,18 +27,9 @@ export class FirebaseConfigService {
   loadFirebaseConfig(): Observable<FirebaseConfig> {
     return this.http.get<FirebaseConfig>(this.apiConfig.firebaseConfigUrl).pipe(
       tap(config => {
-        // Merge backend config with client-specific config
-        const fullConfig: FirebaseConfig = {
-          ...config,
-          // These are client-specific and safe to include
-          apiKey: 'AIzaSyBCqqqTnYdJJpSu3dGpSajDCJK9FdXJ9vM',
-          messagingSenderId: '950969463050',
-          appId: '1:950969463050:web:9e08a75ba6d4c0f3adccbb',
-          measurementId: 'G-PS4MK8MPFR'
-        };
-        
-        this.configSubject.next(fullConfig);
-        console.log('Firebase config loaded and merged:', fullConfig);
+        // Store the minimal config from backend (only projectId + databaseURL)
+        this.configSubject.next(config);
+        console.log('Firebase config loaded (optimized):', config);
       })
     );
   }
@@ -51,17 +38,12 @@ export class FirebaseConfigService {
     return this.configSubject.value;
   }
 
-  // Fallback config using environment settings
+  // Fallback config using environment settings (optimized)
   getFallbackConfig(): FirebaseConfig {
     return {
       projectId: environment.firebase.projectId,
-      databaseURL: environment.firebase.databaseURL,
-      authDomain: environment.firebase.authDomain,
-      storageBucket: environment.firebase.storageBucket,
-      apiKey: environment.firebase.apiKey,
-      messagingSenderId: environment.firebase.messagingSenderId,
-      appId: environment.firebase.appId,
-      measurementId: environment.firebase.measurementId
+      databaseURL: environment.firebase.databaseURL
+      // Removed unnecessary properties for Realtime Database only usage
     };
   }
 }

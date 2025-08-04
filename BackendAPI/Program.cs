@@ -33,6 +33,7 @@ builder.Services.AddCors(options =>
 
 // Register services
 builder.Services.AddSingleton<IFirebaseService, FirebaseService>();
+builder.Services.AddSingleton<IHashService, HashService>();
 
 // Add logging
 builder.Services.AddLogging();

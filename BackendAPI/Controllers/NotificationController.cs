@@ -13,13 +13,16 @@ namespace BackendAPI.Controllers
     public class NotificationController : ControllerBase
     {
         private readonly IFirebaseService _firebaseService;
+        private readonly IHashService _hashService;
         private readonly ILogger<NotificationController> _logger;
 
         public NotificationController(
             IFirebaseService firebaseService,
+            IHashService hashService,
             ILogger<NotificationController> logger)
         {
             _firebaseService = firebaseService;
+            _hashService = hashService;
             _logger = logger;
         }
 
@@ -58,8 +61,23 @@ namespace BackendAPI.Controllers
                     welcomeBody,
                     data);
 
-                // Return 200 OK with no content - Angular will listen to Firebase for the actual notification
-                return Ok();
+                // Get Firebase config to build listen URL
+                var serviceAccountPath = Path.Combine(Directory.GetCurrentDirectory(), "firebase-service-account.json");
+                var serviceAccountJson = System.IO.File.ReadAllText(serviceAccountPath);
+                var serviceAccount = JsonSerializer.Deserialize<JsonElement>(serviceAccountJson);
+                var projectId = serviceAccount.GetProperty("project_id").GetString();
+                var databaseUrl = $"https://{projectId}-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+                // Create listen URL with hashed userId
+                var listenUrl = _hashService.CreateListenUrl(databaseUrl, request.UserId);
+
+                // Return success with listen URL for client to display
+                return Ok(new
+                {
+                    message = "User registered successfully",
+                    listenUrl = listenUrl,
+                    userId = request.UserId
+                });
             }
             catch (Exception ex)
             {
@@ -129,6 +147,39 @@ namespace BackendAPI.Controllers
         }
 
         /// <summary>
+        /// Get Firebase notification path for userId (with hash)
+        /// </summary>
+        /// <param name="request">Request containing userId</param>
+        /// <returns>Firebase path and hashed userId</returns>
+        [HttpPost("firebase-path")]
+        [ProducesResponseType(typeof(object), 200)]
+        public IActionResult GetFirebaseNotificationPath([FromBody] RegisterRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(request.UserId))
+                {
+                    return BadRequest("UserId is required");
+                }
+
+                var hashedUserId = _hashService.HashUserId(request.UserId);
+                var notificationPath = _hashService.CreateNotificationPath(request.UserId);
+
+                return Ok(new
+                {
+                    path = notificationPath,
+                    hashedUserId = hashedUserId,
+                    originalUserId = request.UserId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting Firebase notification path for user: {UserId}", request.UserId);
+                return StatusCode(500, "Failed to get Firebase notification path");
+            }
+        }
+
+        /// <summary>
         /// Test endpoint to verify API is working
         /// </summary>
         /// <returns>API status message</returns>
@@ -169,15 +220,13 @@ namespace BackendAPI.Controllers
 
                 var projectId = serviceAccount.GetProperty("project_id").GetString();
 
-                // Trả về client config (không bao gồm private key)
+                // Trả về MINIMAL config - chỉ cần cho Firebase Realtime Database
                 return Ok(new
                 {
                     projectId = projectId,
-                    databaseURL = $"https://{projectId}-default-rtdb.asia-southeast1.firebasedatabase.app",
-                    authDomain = $"{projectId}.firebaseapp.com",
-                    storageBucket = $"{projectId}.firebasestorage.app",
-                    // Note: Không trả về API key và các thông tin nhạy cảm
-                    // Client sẽ cần sử dụng Firebase Auth hoặc Anonymous Auth
+                    databaseURL = $"https://{projectId}-default-rtdb.asia-southeast1.firebasedatabase.app"
+                    // Note: Chỉ cần 2 thuộc tính này cho Realtime Database
+                    // Đã loại bỏ authDomain, storageBucket vì không sử dụng Auth/Storage
                 });
             }
             catch (Exception ex)
