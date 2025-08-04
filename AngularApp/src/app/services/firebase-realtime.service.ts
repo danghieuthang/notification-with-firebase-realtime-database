@@ -2,9 +2,8 @@ import { Injectable } from '@angular/core';
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off, Database } from 'firebase/database';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { filter, switchMap } from 'rxjs/operators';
-import { NotificationData, NotificationService } from './notification.service';
-import { FirebaseConfigService, FirebaseConfig } from './firebase-config.service';
+import { filter } from 'rxjs/operators';
+import { NotificationData } from './notification.service';
 
 @Injectable({
   providedIn: 'root'
@@ -19,46 +18,42 @@ export class FirebaseRealtimeService {
   private lastNotificationId: string | null = null;
   private isInitialized = false;
 
-  constructor(
-    private firebaseConfigService: FirebaseConfigService,
-    private notificationService: NotificationService
-  ) { }
+  constructor() { }
 
-  private async initializeFirebase(): Promise<void> {
+  private async initializeFirebase(listenUrl: string): Promise<void> {
     if (this.isInitialized) return;
 
     try {
-      // Load config from backend API first
-      await this.firebaseConfigService.loadFirebaseConfig().toPromise();
-      const config = this.firebaseConfigService.getCurrentConfig();
+      // Extract Firebase config from listenUrl
+      const url = new URL(listenUrl);
+      const databaseURL = `${url.protocol}//${url.host}`;
       
-      if (config) {
-        console.log('Using optimized Firebase config from backend API:', config);
-        this.app = initializeApp({
-          projectId: config.projectId,
-          databaseURL: config.databaseURL
-          // Optimized: Only essential properties for Firebase Realtime Database
-          // Removed: authDomain, storageBucket, apiKey, messagingSenderId, appId, measurementId
-        });
-      } else {
-        throw new Error('Failed to load config from backend');
-      }
+      // Extract projectId from hostname: fir-notification-b6ff2-default-rtdb.asia-southeast1.firebasedatabase.app
+      const hostParts = url.hostname.split('.');
+      const projectId = hostParts[0].replace('-default-rtdb', '');
+      
+      console.log('Extracted Firebase config from listenUrl:', { projectId, databaseURL });
+      
+      this.app = initializeApp({
+        projectId: projectId,
+        databaseURL: databaseURL
+      });
     } catch (error) {
-      console.warn('Failed to load config from backend, using fallback:', error);
-      // Fallback with complete config
-      const fallbackConfig = this.firebaseConfigService.getFallbackConfig();
-      console.log('Using fallback Firebase config:', fallbackConfig);
-      
-      this.app = initializeApp(fallbackConfig);
+      console.error('Failed to extract Firebase config from listenUrl:', error);
+      throw new Error('Invalid listenUrl format');
     }
 
     this.database = getDatabase(this.app);
     this.isInitialized = true;
-    console.log('Firebase initialized successfully');
+    console.log('Firebase initialized successfully from listenUrl');
   }
 
-  async subscribeToNotifications(userId: string): Promise<void> {
-    await this.initializeFirebase(); // Ensure Firebase is initialized
+  async subscribeToNotifications(userId: string, listenUrl?: string): Promise<void> {
+    if (!listenUrl) {
+      throw new Error('listenUrl is required for subscription');
+    }
+    
+    await this.initializeFirebase(listenUrl); // Initialize Firebase with listenUrl
     this.unsubscribeFromNotifications(); // Clean up any existing subscription
     
     if (!this.database) {
@@ -66,18 +61,17 @@ export class FirebaseRealtimeService {
     }
     
     try {
-      // Get the hashed path from backend
-      const pathInfo = await this.notificationService.getFirebaseNotificationPath(userId).toPromise();
-      
-      if (!pathInfo) {
-        throw new Error('Failed to get Firebase notification path');
-      }
-      
       this.currentUserId = userId;
-      console.log(`Subscribing to Firebase path: ${pathInfo.path} (hashed: ${pathInfo.hashedUserId})`);
       
-      // Use the hashed path for Firebase subscription
-      this.currentRef = ref(this.database, pathInfo.path);
+      // Extract path from full URL: https://...firebasedatabase.app/notifications/hash -> notifications/hash
+      const url = new URL(listenUrl);
+      const firebasePath = url.pathname.substring(1); // Remove leading slash
+      
+      console.log(`Using provided listenUrl: ${listenUrl}`);
+      console.log(`Extracted Firebase path: ${firebasePath}`);
+      
+      // Use the Firebase path for subscription
+      this.currentRef = ref(this.database, firebasePath);
       
       onValue(this.currentRef, (snapshot) => {
         const data = snapshot.val();
@@ -125,15 +119,7 @@ export class FirebaseRealtimeService {
   }
 
   getCurrentDatabaseUrl(): string | null {
-    const config = this.firebaseConfigService.getCurrentConfig();
-    return config?.databaseURL || null;
-  }
-
-  getListenUrl(userId: string): string {
-    const databaseUrl = this.getCurrentDatabaseUrl();
-    if (databaseUrl) {
-      return `${databaseUrl}/notifications/${userId}`;
-    }
-    return `Firebase Realtime Database/notifications/${userId}`;
+    // Not needed anymore since we extract from listenUrl
+    return null;
   }
 }

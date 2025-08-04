@@ -478,8 +478,9 @@ export class NotificationListComponent implements OnInit, OnDestroy {
 
   private async startRealtimeListening(): Promise<void> {
     try {
-      // Subscribe to realtime notifications
-      await this.firebaseRealtimeService.subscribeToNotifications(this.currentUserId);
+      // Subscribe to realtime notifications using listenUrl from register response
+      // listenUrl contains everything needed: databaseURL + Firebase path with hash
+      await this.firebaseRealtimeService.subscribeToNotifications(this.currentUserId, this.firebaseListenUrl);
       
       // Listen for new notifications
       this.realtimeSubscription = this.firebaseRealtimeService.getNotificationUpdates().subscribe({

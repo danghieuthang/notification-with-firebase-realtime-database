@@ -71,11 +71,4 @@ export class NotificationService {
     const url = `${this.apiConfig.notificationApiUrl}/user/${userId}`;
     return this.http.get<NotificationData[]>(url);
   }
-
-  // Get Firebase notification path for userId (with hash)
-  getFirebaseNotificationPath(userId: string): Observable<{path: string, hashedUserId: string}> {
-    const url = `${this.apiConfig.notificationApiUrl}/firebase-path`;
-    const body = { userId };
-    return this.http.post<{path: string, hashedUserId: string}>(url, body, this.httpOptions);
-  }
 }

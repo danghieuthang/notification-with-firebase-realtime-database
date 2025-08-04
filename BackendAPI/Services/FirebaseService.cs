@@ -25,68 +25,17 @@ namespace BackendAPI.Services
         private readonly FirebaseClient? _firebaseClient;
         private readonly IHashService _hashService;
 
-        public FirebaseService(IConfiguration configuration, ILogger<FirebaseService> logger, IHashService hashService)
+        public FirebaseService(
+            IFirebaseConfigurationService firebaseConfig, 
+            ILogger<FirebaseService> logger, 
+            IHashService hashService)
         {
             _logger = logger;
             _hashService = hashService;
 
             try
             {
-                var serviceAccountPath = configuration["Firebase:ServiceAccountPath"] ?? "firebase-service-account.json";
-                var configuredDatabaseUrl = configuration["Firebase:DatabaseUrl"];
-                
-                string databaseUrl;
-                
-                // Priority 1: Use explicitly configured DatabaseUrl if provided
-                if (!string.IsNullOrWhiteSpace(configuredDatabaseUrl))
-                {
-                    databaseUrl = configuredDatabaseUrl;
-                    _logger.LogInformation("Using explicitly configured Firebase Database URL");
-                }
-                // Priority 2: Auto-derive from service account project_id
-                else if (File.Exists(serviceAccountPath))
-                {
-                    var serviceAccountJson = File.ReadAllText(serviceAccountPath);
-                    var serviceAccount = JsonSerializer.Deserialize<Dictionary<string, object>>(serviceAccountJson);
-                    
-                    if (serviceAccount?.TryGetValue("project_id", out var projectIdObj) == true)
-                    {
-                        var projectId = projectIdObj.ToString();
-                        var region = configuration["Firebase:Region"] ?? "asia-southeast1";
-                        
-                        // Support different Firebase Realtime Database regions
-                        if (region != "us-central1")
-                        {
-                            databaseUrl = $"https://{projectId}-default-rtdb.{region}.firebasedatabase.app/";
-                        }
-                        else
-                        {
-                            databaseUrl = $"https://{projectId}-default-rtdb.firebaseio.com/";
-                        }
-                        
-                        _logger.LogInformation("Auto-derived Firebase Database URL for project: {ProjectId}, region: {Region}", 
-                            projectId, region);
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException("project_id not found in service account file");
-                    }
-                }
-                // Priority 3: Environment variable fallback
-                else
-                {
-                    databaseUrl = Environment.GetEnvironmentVariable("FIREBASE_DATABASE_URL") ?? string.Empty;
-                    if (string.IsNullOrWhiteSpace(databaseUrl))
-                    {
-                        throw new InvalidOperationException(
-                            "Firebase Database URL not configured. Please either:\n" +
-                            "1. Set Firebase:DatabaseUrl in appsettings.json, or\n" +
-                            "2. Ensure firebase-service-account.json exists with valid project_id, or\n" +
-                            "3. Set FIREBASE_DATABASE_URL environment variable");
-                    }
-                    _logger.LogInformation("Using Firebase Database URL from environment variable");
-                }
-                
+                var databaseUrl = firebaseConfig.GetDatabaseUrlAsync().GetAwaiter().GetResult();
                 _firebaseClient = new FirebaseClient(databaseUrl);
                 _logger.LogInformation("Firebase client successfully initialized with URL: {DatabaseUrl}", databaseUrl);
             }
